@@ -19,7 +19,7 @@ Lixie::Lixie(const uint8_t pin, uint8_t nDigits):NumDigits(nDigits), NumLEDs(nDi
 	led_states = new byte[NumDigits * 3]; // 24 bits for 20 LED states
 	colors = new CRGB[NumDigits];
 	colors_off = new CRGB[NumDigits];
-	digit_brightness = new byte[NumDigits];
+	digit_brightness = new byte[NumLEDs];
 	
 	build_controller(pin);
 }
@@ -51,8 +51,9 @@ void Lixie::begin() {
 	for(byte i = 0; i < NumDigits; i++){
 		colors[i] = CRGB(255,255,255);
 		colors_off[i] = CRGB(0,0,0);
-		digit_brightness[i] = 255;
 	}
+	for(byte i = 0; i < NumLEDs; i++)
+		digit_brightness[i] = 255;
 	white_balance(Tungsten100W);
 	store_current(0);
 	clear();
@@ -85,23 +86,23 @@ void Lixie::show(){
 			col_off = colors_off[i/LEDsPerDigit];
 		}
 
-		if(getBit(i) == 1){			
-			leds[i].r = col.r * digit_brightness[i/LEDsPerDigit]/255.0;
-			leds[i].g = col.g * digit_brightness[i/LEDsPerDigit]/255.0;
-			leds[i].b = col.b * digit_brightness[i/LEDsPerDigit]/255.0;
+		if(getBit(i) == 1){
+			leds[i].r = col.r * digit_brightness[i]/255.0;
+			leds[i].g = col.g * digit_brightness[i]/255.0;
+			leds[i].b = col.b * digit_brightness[i]/255.0;
 		}
 		else{
 			if(nixie == false){
-				leds[i].r = col_off.r * digit_brightness[i/LEDsPerDigit]/255.0;
-				leds[i].g = col_off.g * digit_brightness[i/LEDsPerDigit]/255.0;
-				leds[i].b = col_off.b * digit_brightness[i/LEDsPerDigit]/255.0;
+				leds[i].r = col_off.r * digit_brightness[i]/255.0;
+				leds[i].g = col_off.g * digit_brightness[i]/255.0;
+				leds[i].b = col_off.b * digit_brightness[i]/255.0;
 			}
 			else if(nixie == true){
 				byte index = i/LEDsPerDigit;
 				if(index < current_number_size && nixie_aura == true){
-					leds[i].r = col_off.r * digit_brightness[i/LEDsPerDigit]/255.0;
-					leds[i].g = col_off.g * digit_brightness[i/LEDsPerDigit]/255.0;
-					leds[i].b = col_off.b * digit_brightness[i/LEDsPerDigit]/255.0;
+					leds[i].r = col_off.r * digit_brightness[i]/255.0;
+					leds[i].g = col_off.g * digit_brightness[i]/255.0;
+					leds[i].b = col_off.b * digit_brightness[i]/255.0;
 				}
 				else{
 					leds[i].r = 0;
@@ -479,7 +480,7 @@ void Lixie::write_flip(uint32_t input, uint16_t flip_time, uint8_t flip_speed){
 void Lixie::write_fade(uint32_t input, uint16_t fade_time){
     byte new_number_arr[20];
 	char buf [20];
-	
+
 	for(byte i = 0; i < 20; i++){
 		new_number_arr[i] = 255;
 		buf[i] = '0';
@@ -533,7 +534,8 @@ void Lixie::write_fade(uint32_t input, uint16_t fade_time){
 			byte lix_index = NumDigits-1-i;
 			if(changed_shift[i] == 1){
 				//if(i >= shift){
-					digit_brightness[lix_index] = f;
+					for(byte j = 0; j < LEDsPerDigit; j++)
+						digit_brightness[lix_index*LEDsPerDigit + j] = f;
 				//}
 			}
 		}
@@ -546,15 +548,101 @@ void Lixie::write_fade(uint32_t input, uint16_t fade_time){
 			byte lix_index = NumDigits-1-i;
 			if(changed_shift[i] == 1){
 				//if(i >= shift){
-					digit_brightness[lix_index] = f;
+					for(byte j = 0; j < LEDsPerDigit; j++)
+						digit_brightness[lix_index*LEDsPerDigit + j] = f;
 				//}
+			}
+		}
+		show();
+		delay(step);;
+	}
+	write(input);
+	for(byte i = 0; i < NumLEDs; i++){
+		digit_brightness[i] = 255;
+	}
+	show();
+}
+
+
+void Lixie::write_crossfade(uint32_t input, uint16_t fade_time, byte rollover_digits){
+    byte new_number_arr[20];
+	char buf [20];
+
+	for(byte i = 0; i < 20; i++){
+		new_number_arr[i] = 255;
+		buf[i] = '0';
+	}
+
+	int8_t places_new = get_size(input);
+	int8_t places_old = current_number_size;
+
+	sprintf (buf, "%lu", input); // int to char array
+
+	for (byte i = 0; i < places_new; i++) {
+		byte d = char_to_number(buf[i]);
+		if(d <= 9){
+			new_number_arr[i] = d; // char to int
+		}
+	}
+
+	byte current_shift[NumDigits];
+	byte new_shift[NumDigits];
+	byte changed[20];
+
+	for(int8_t i = 0; i < NumDigits; i++) {
+		if (i < places_new)
+			new_shift[i] = new_number_arr[places_new-i-1];
+		else
+			new_shift[i] = 255;
+
+		if (i < places_old)
+			current_shift[i] = current_number_arr[places_old-i-1];
+		else
+			current_shift[i] = 255;
+
+		changed[i] = 0;
+		if (new_shift[i] != current_shift[i])
+			changed[i] = 1;
+    }
+
+	byte div = 20;
+	byte step = fade_time/(255/div);
+	show();
+
+	for(int f = 255; f > 0; f-=div){
+		for(byte i = 0; i < NumDigits; i++){
+			byte lix_index = i;
+			if(changed[i] == 1) {
+				byte input_fade[2];
+				input_fade[0] = current_shift[i];
+				input_fade[1] = new_shift[i];
+				// First check for roll-over digits.
+			    if ((i < rollover_digits) && (input_fade[0] > input_fade[1]) && (current_shift[i] != 255) && (new_shift[i] != 255)) {
+					int tmp_digit = ((input_fade[0] - input_fade[1])*f+128)/255 + input_fade[1];
+     				write_digit(tmp_digit, i, false);
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]] = 255;
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]+10] = 255;
+				} // Then for cross fade digits.
+			    else if (i < min(places_new, places_old)) {
+					write_digits(input_fade, 2, i, false);
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[0]]] = f;
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[0]]+10] = f;
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]] = 255-f;
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]+10] = 255-f;
+				}
+				else { // Then for digits that need to be faded in.
+     				write_digit(input_fade[1], i, false);
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]] = 255-f;
+					digit_brightness[lix_index*LEDsPerDigit + Addresses[input_fade[1]]+10] = 255-f;
+				}
 			}
 		}
 		show();
 		delay(step);
 	}
+
 	write(input);
-	for(byte i = 0; i < NumDigits; i++){
+	for(byte i = 0; i < NumLEDs; i++){
 		digit_brightness[i] = 255;
 	}
 	show();
@@ -578,6 +666,34 @@ void Lixie::write_digit(byte input, byte index, bool show_change){
 
 	setBit(L1,1);
 	setBit(L2,1);
+
+	if(show_change == true){
+		show();
+	}
+}
+
+// Illiminates multiple digits on a single Lixie display.
+void Lixie::write_digits(byte input[], byte num_digits, byte index, bool show_change){
+	if(index >= NumDigits) return;
+
+	uint16_t start = (index*LEDsPerDigit);
+
+	for(uint16_t i = start; i < start+LEDsPerDigit; i++){
+		setBit(i,0);
+	}
+
+	for (byte i = 0; i < num_digits; i++) {
+
+		while(input[i] > 9){
+			input[i]-=9;
+		}
+
+		uint16_t L1 = start+Addresses[input[i]];
+		uint16_t L2 = start+Addresses[input[i]] + 10;
+
+		setBit(L1,1);
+		setBit(L2,1);
+	}
 
 	if(show_change == true){
 		show();
@@ -677,6 +793,93 @@ void Lixie::sweep(CRGB col, byte speed){
 			}
 		}
 	}
+}
+
+void Lixie::roll_out(uint16_t speed, uint8_t dir)
+{
+	int nPlace = 1;
+	// Powers of 10 while avoiding floating point math
+	for(uint8_t i = 1; i < current_number_size; i++)
+		nPlace *= 10;
+
+	for (int i = NumDigits-1; i >= 0; i--) {
+		int mult = dir ? 1 : nPlace;
+		clear(false);
+		for (int j = 0; j <= i; j++) {
+			uint32_t tmp = (current_number/mult) % 10;
+			int index = dir ? NumDigits + j-i-1 : i-j;
+			write_digit(tmp, index, false);
+			if (dir) mult *= 10;
+			else     mult /= 10;
+		}
+		show();
+		delay(speed);
+	}
+	clear(true);
+	current_number_size = 0;
+}
+
+void Lixie::roll_in(uint32_t input, uint16_t speed, uint8_t dir)
+{
+	int nPlace = 1;
+	// Powers of 10 while avoiding floating point math
+	for(uint8_t i = 1; i < min(get_size(input), NumDigits); i++)
+		nPlace *= 10;
+
+	for (int i = 0; i < NumDigits; i++) {
+		int mult = dir ? 1 : nPlace;
+		for (int j = 0; j <= i; j++) {
+			uint32_t tmp = (input/mult) % 10;
+			int index = dir ? NumDigits + j-i-1 : i-j;
+			write_digit(tmp, index, false);
+			if (dir) mult *= 10;
+			else     mult /= 10;
+		}
+		show();
+		delay(speed);
+	}
+	write(input);
+}
+
+void Lixie::waterfall(uint32_t input, uint16_t digit_time, uint16_t transition_time, uint8_t dir)
+{
+	int nPlace = 1;
+	// Powers of 10 while avoiding floating point math
+	for(uint8_t i = 1; i < min(get_size(input), NumDigits); i++)
+		nPlace *= 10;
+
+	int mult = dir ? 1 : nPlace;
+	uint8_t next_digit = 1, digits_complete = 0;
+	unsigned long next_digit_time, digit_start_time;
+
+	digit_start_time = next_digit_time = millis();
+	while (digits_complete < NumDigits) {
+		for (int i = 0; i < next_digit; i++) {
+			if (i >= digits_complete) {
+				unsigned long t = millis();
+				byte lix_index = dir ? i : NumDigits-i-1;
+				int tmp = random(0,10);
+				if ((i <= digits_complete) && (t - digit_start_time >= transition_time)) {
+					tmp = (input/mult) % 10;
+					if (dir) mult *= 10;
+					else     mult /= 10;
+					digit_start_time = t;
+					// Now follow the transition time.
+					transition_time = digit_time;
+					digits_complete++;
+				}
+				write_digit(tmp, lix_index, false);
+				if (t - next_digit_time >= digit_time) {
+					next_digit_time = t;
+					if (next_digit < NumDigits)
+						next_digit++;
+				}
+			}
+		}
+		show();
+		delay(30);
+	}
+	write(input);
 }
 
 void Lixie::progress(float percent, CRGB col1, CRGB col2){	

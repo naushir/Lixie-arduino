@@ -39,6 +39,7 @@ class Lixie{
 		
 		void write_flip(uint32_t input, uint16_t flip_time = 100, uint8_t flip_speed = 10);
 		void write_fade(uint32_t input, uint16_t fade_time = 250);
+		void write_crossfade(uint32_t input, uint16_t fade_time = 250, byte rollover_digits = 0);
 		
 		void sweep(CRGB col, byte speed = 15);
 		void progress(float percent, CRGB col1, CRGB col2);
@@ -46,8 +47,16 @@ class Lixie{
 		void fill_fade_out(CRGB col, byte fade_speed = 20);
     
 		void write_digit(byte input, byte index, bool show_change = true);
+		// Illiminates multiple digits on a single Lixie display.
+	    void write_digits(byte input[], byte num_digits, byte index, bool show_change = true);
 		void push_digit(byte number);
     
+    	// dir == 1: left -> right
+    	// dir == 0: left <- right
+    	void waterfall(uint32_t input, uint16_t digit_time, uint16_t transition_time, uint8_t dir = 1);
+    	void roll_out(uint16_t speed, uint8_t dir = 1);
+    	void roll_in(uint32_t input, uint16_t speed, uint8_t dir = 1);
+
 		void color(byte r, byte g, byte b);
 		void color(CRGB c);
 		void color(byte r, byte g, byte b, byte index);
