@@ -844,6 +844,9 @@ void Lixie::roll_in(uint32_t input, uint16_t speed, uint8_t dir)
 void Lixie::waterfall(uint32_t input, uint16_t digit_time, uint16_t transition_time, uint8_t dir)
 {
 	int nPlace = 1;
+	uint8_t cur[20];
+	memset(cur, 0, sizeof(cur));
+
 	// Powers of 10 while avoiding floating point math
 	for(uint8_t i = 1; i < min(get_size(input), NumDigits); i++)
 		nPlace *= 10;
@@ -858,9 +861,11 @@ void Lixie::waterfall(uint32_t input, uint16_t digit_time, uint16_t transition_t
 			if (i >= digits_complete) {
 				unsigned long t = millis();
 				byte lix_index = dir ? i : NumDigits-i-1;
-				int tmp = random(0,10);
-				if ((i <= digits_complete) && (t - digit_start_time >= transition_time)) {
-					tmp = (input/mult) % 10;
+				int actual = (input/mult) % 10;
+				int tmp =  (cur[lix_index]++ % 10);
+				if ((i <= digits_complete) && (t - digit_start_time >= transition_time)
+					&& (tmp == actual)) {
+					tmp = actual;
 					if (dir) mult *= 10;
 					else     mult /= 10;
 					digit_start_time = t;
@@ -877,7 +882,7 @@ void Lixie::waterfall(uint32_t input, uint16_t digit_time, uint16_t transition_t
 			}
 		}
 		show();
-		delay(30);
+		delay(50);
 	}
 	write(input);
 }
