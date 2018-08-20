@@ -22,6 +22,7 @@ Lixie::Lixie(const uint8_t pin, uint8_t nDigits):NumDigits(nDigits), NumLEDs(nDi
 	digit_brightness = new byte[NumLEDs];
 	
 	build_controller(pin);
+	FastLED.setBrightness(255);
 }
 
 CRGB enforce_brightness(CRGB input){
@@ -799,7 +800,7 @@ void Lixie::roll_out(uint16_t speed, uint8_t dir)
 {
 	int nPlace = 1;
 	// Powers of 10 while avoiding floating point math
-	for(uint8_t i = 1; i < current_number_size; i++)
+	for(uint8_t i = 1; i < min(current_number_size, NumDigits); i++)
 		nPlace *= 10;
 
 	for (int i = NumDigits-1; i >= 0; i--) {
